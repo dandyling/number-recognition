@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Digit Recognizer</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e3a8a 100%);
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 20px;
+      padding: 32px;
+      width: 100%;
+      max-width: 460px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    }
+    h1 { margin: 0 0 6px; font-size: 24px; }
+    p.sub { margin: 0 0 24px; color: #94a3b8; font-size: 14px; }
+    .dropzone {
+      border: 2px dashed rgba(148, 163, 184, 0.4);
+      border-radius: 14px;
+      padding: 28px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .dropzone:hover, .dropzone.drag { border-color: #818cf8; background: rgba(129, 140, 248, 0.08); }
+    .dropzone span { color: #cbd5e1; font-size: 14px; }
+    #preview {
+      display: none;
+      margin: 20px auto 0;
+      max-width: 200px;
+      max-height: 200px;
+      border-radius: 12px;
+      background: #fff;
+      padding: 8px;
+    }
+    button {
+      margin-top: 20px;
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .result {
+      display: none;
+      margin-top: 24px;
+      text-align: center;
+    }
+    .digit {
+      font-size: 88px;
+      font-weight: 800;
+      line-height: 1;
+      background: linear-gradient(135deg, #a5b4fc, #f0abfc);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .confidence { color: #94a3b8; font-size: 14px; margin-top: 6px; }
+    .error { color: #fca5a5; font-size: 14px; margin-top: 16px; text-align: center; display: none; }
+    input[type=file] { display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔢 Digit Recognizer</h1>
+    <p class="sub">Upload an image of a handwritten digit (0–9) and the model will tell you which number it is.</p>
+
+    <label class="dropzone" id="dropzone">
+      <span id="dropText">Click to choose an image, or drag &amp; drop it here</span>
+      <input type="file" id="fileInput" accept="image/*" />
+    </label>
+
+    <img id="preview" alt="preview" />
+
+    <button id="predictBtn" disabled>Recognize digit</button>
+
+    <div class="result" id="result">
+      <div class="digit" id="digit">–</div>
+      <div class="confidence" id="confidence"></div>
+    </div>
+    <div class="error" id="error"></div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const dropzone = document.getElementById('dropzone');
+    const dropText = document.getElementById('dropText');
+    const preview = document.getElementById('preview');
+    const predictBtn = document.getElementById('predictBtn');
+    const result = document.getElementById('result');
+    const digitEl = document.getElementById('digit');
+    const confidenceEl = document.getElementById('confidence');
+    const errorEl = document.getElementById('error');
+
+    let selectedFile = null;
+
+    function handleFile(file) {
+      if (!file) return;
+      selectedFile = file;
+      dropText.textContent = file.name;
+      preview.src = URL.createObjectURL(file);
+      preview.style.display = 'block';
+      predictBtn.disabled = false;
+      result.style.display = 'none';
+      errorEl.style.display = 'none';
+    }
+
+    fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+
+    ['dragenter', 'dragover'].forEach(ev =>
+      dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add('drag'); }));
+    ['dragleave', 'drop'].forEach(ev =>
+      dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove('drag'); }));
+    dropzone.addEventListener('drop', (e) => handleFile(e.dataTransfer.files[0]));
+
+    predictBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+      predictBtn.disabled = true;
+      predictBtn.textContent = 'Recognizing…';
+      errorEl.style.display = 'none';
+
+      const formData = new FormData();
+      formData.append('image', selectedFile);
+
+      try {
+        const resp = await fetch('/predict', { method: 'POST', body: formData });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'prediction failed');
+
+        digitEl.textContent = data.digit;
+        confidenceEl.textContent = `Confidence: ${(data.confidence * 100).toFixed(1)}%`;
+        result.style.display = 'block';
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+      } finally {
+        predictBtn.disabled = false;
+        predictBtn.textContent = 'Recognize digit';
+      }
+    });
+  </script>
+</body>
+</html>

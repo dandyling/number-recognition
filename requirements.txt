@@ -1,0 +1,12 @@
+# Web app + inference
+Flask==3.1.3
+numpy==2.4.6
+pillow==12.2.0
+
+# Model training (CPU build). When installing, use the CPU wheel index:
+#   pip install torch==2.12.1 torchvision==0.27.1 --index-url https://download.pytorch.org/whl/cpu
+torch==2.12.1
+torchvision==0.27.1
+
+# End-to-end browser test
+playwright==1.60.0

@@ -1,0 +1,10 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Downloaded MNIST dataset (re-downloaded by model/train.py)
+model/data/
+
+# Playwright raw recording (the committed mp4 is the shareable artifact)
+e2e/videos/*.webm
