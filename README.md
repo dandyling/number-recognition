@@ -6,23 +6,34 @@ recognise handwritten digits and serves it behind a web UI where you can
 
 - **Model** — a compact CNN trained on the [MNIST](http://yann.lecun.com/exdb/mnist/)
   dataset (downloaded from the internet), reaching **~99% test accuracy**.
-- **Backend** — a Flask API that loads the trained weights and predicts the
-  digit from an uploaded image.
-- **Frontend** — a single page where you upload an image and see the digit and
-  the model's confidence.
-- **E2E test** — drives a real Chromium browser with Playwright, uploads sample
-  images, asserts the predictions, and records a video of the whole flow.
+- **Static web app** (`public/`) — the model exported to ONNX and run **entirely
+  in the browser** with onnxruntime-web. This is what's deployed to **Vercel**:
+  no server, no cold starts, scales as a plain static site.
+- **Flask backend** (`backend/`) — a reference API that loads the PyTorch weights
+  and predicts from an uploaded image. Handy for local development.
+- **E2E tests** — drive a real Chromium browser with Playwright, upload sample
+  images, assert the predictions, and record a video of the whole flow.
+
+The static app and the Flask app use the **same model and the same
+preprocessing**, so they produce identical predictions.
 
 ## Project layout
 
 ```
-model/train.py          CNN definition + training loop (saves model/mnist_cnn.pt)
-model/mnist_cnn.pt       Trained weights (committed so the app runs out of the box)
-backend/app.py           Flask server: GET / (UI) and POST /predict
-frontend/index.html      Upload UI
-e2e/test_e2e.py          Playwright end-to-end test that records a video
-e2e/samples/             Sample digit images used by the test
-e2e/videos/              Recorded run -> digit_recognition_e2e.mp4
+model/train.py           CNN definition + training loop (saves model/mnist_cnn.pt)
+model/mnist_cnn.pt        Trained PyTorch weights
+model/mnist_cnn.onnx      Model exported to ONNX (used by the browser app)
+public/index.html         Static upload UI deployed to Vercel
+public/app.js             In-browser preprocessing + ONNX inference
+public/ort/               Vendored onnxruntime-web runtime (js + wasm)
+public/mnist_cnn.onnx     Model served to the browser
+backend/app.py            Flask server: GET / (UI) and POST /predict
+frontend/index.html       Upload UI for the Flask app
+e2e/test_e2e_static.py    Playwright E2E against the static (ONNX) app
+e2e/test_e2e.py           Playwright E2E against the Flask app
+e2e/samples/              Sample digit images used by the tests
+e2e/videos/               Recorded runs (.webm / .mp4)
+vercel.json               Static deploy config (serves public/)
 ```
 
 ## Quick start
@@ -52,17 +63,22 @@ Uploaded photos rarely look like raw MNIST samples, so `backend/app.py`:
 This lets it handle both real MNIST-style images and, e.g., a black digit typed
 on a white background.
 
-## End-to-end test (with video)
+## End-to-end tests (with video)
 
 ```bash
-# with the server running on http://localhost:5000
-python e2e/test_e2e.py
+# static / ONNX app (what's deployed to Vercel)
+cd public && python -m http.server 8000 &
+BASE_URL=http://localhost:8000 python e2e/test_e2e_static.py
+
+# Flask app
+python backend/app.py &
+BASE_URL=http://localhost:5000 python e2e/test_e2e.py
 ```
 
-It launches Chromium, uploads `e2e/samples/*.png`, verifies each prediction is
-correct, and writes `e2e/videos/digit_recognition_e2e.mp4`.
+Each launches Chromium, uploads `e2e/samples/*.png`, verifies the prediction,
+and records a video to `e2e/videos/`.
 
-Latest run:
+Latest run (identical for both stacks):
 
 ```
 mnist_7.png -> 7  (99.9%)
@@ -70,3 +86,10 @@ typed_5.png -> 5  (100.0%)   # black digit on white background
 mnist_3.png -> 3  (75.0%)
 E2E PASSED: all uploaded digits were recognised correctly.
 ```
+
+## Deploy to Vercel
+
+The static app is deployed to Vercel under the *dandyling's projects* team.
+`vercel.json` serves `public/` as a static site and `.vercelignore` keeps the
+Python `venv/` and the MNIST dataset out of the upload. Since inference runs
+client-side in WebAssembly, there's no backend to host.
